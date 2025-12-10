@@ -1,11 +1,9 @@
-// api/process.js
 import Groq from "groq-sdk";
 import multer from 'multer';
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Middleware helper
 function runMiddleware(req, res, fn) {
   return new Promise((resolve, reject) => {
     fn(req, res, (result) => {
@@ -37,8 +35,6 @@ export default async function handler(req, res) {
     const userText = transcription.text;
     console.log("User said:", userText);
 
-    // 3. Think (Brain)
-    // We send the transcript to Llama 3 to get an intelligent answer
     const chatCompletion = await groq.chat.completions.create({
       messages: [
         {
