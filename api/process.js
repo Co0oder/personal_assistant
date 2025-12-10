@@ -50,7 +50,7 @@ export default async function handler(req, res) {
           content: userText
         }
       ],
-      model: "llama3-8b-8192", // Fast and smart
+      model: "llama-3.1-8b-instant", // Fast and smart
     });
 
     const aiResponse = chatCompletion.choices[0]?.message?.content || "I am not sure.";
