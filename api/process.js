@@ -63,7 +63,6 @@ export default async function handler(req, res) {
   }
 }
 
-// Vercel Config: Disable default body parsing
 export const config = {
   api: {
     bodyParser: false,
