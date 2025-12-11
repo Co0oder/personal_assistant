@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "dotenv": "^17.2.3",
+    "googleapis": "^168.0.0",
     "groq-sdk": "^0.37.0",
     "multer": "^2.0.2"
   }
