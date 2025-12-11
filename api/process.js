@@ -2,22 +2,26 @@ import Groq from "groq-sdk";
 import multer from "multer";
 import { google } from "googleapis";
 import fs from "fs";
+import path from "path"; // <--- Import this to handle extensions
 
 // 1. Setup Config
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const upload = multer({ dest: "/tmp" }); // Use disk for reliability
+const upload = multer({ dest: "/tmp" });
 
 // 2. Setup Google Calendar Auth
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
 );
-oauth2Client.setCredentials({
-  refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-});
+
+// Only set credentials if the token exists (prevents crash on first deploy)
+if (process.env.GOOGLE_REFRESH_TOKEN) {
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+  });
+}
 const calendar = google.calendar({ version: "v3", auth: oauth2Client });
 
-// Middleware Helper
 function runMiddleware(req, res, fn) {
   return new Promise((resolve, reject) => {
     fn(req, res, (result) => {
@@ -31,23 +35,36 @@ export default async function handler(req, res) {
   if (req.method !== "POST")
     return res.status(405).json({ error: "Method not allowed" });
 
+  let filePath = null;
+
   try {
     // --- STEP 1: HEAR (Transcribe) ---
     await runMiddleware(req, res, upload.single("audio"));
+
     if (!req.file) return res.status(400).json({ error: "No audio provided" });
 
+    // FIX: Rename the file to include the original extension
+    const originalExt = path.extname(req.file.originalname) || ".m4a"; // Default to .m4a if missing
+    filePath = req.file.path + originalExt; // e.g., /tmp/12345 -> /tmp/12345.m4a
+
+    fs.renameSync(req.file.path, filePath);
+
+    console.log(`Processing: ${filePath}`);
+
     const transcription = await groq.audio.transcriptions.create({
-      file: fs.createReadStream(req.file.path),
+      file: fs.createReadStream(filePath), // Send the file WITH the extension
       model: "whisper-large-v3-turbo",
       response_format: "json",
     });
 
     const userText = transcription.text;
     console.log("User said:", userText);
-    fs.unlinkSync(req.file.path); // Clean up temp file
+
+    // Clean up immediately after reading
+    fs.unlinkSync(filePath);
+    filePath = null; // Prevent double deletion in finally block
 
     // --- STEP 2: THINK (Extract Intent) ---
-    // We give the AI the current time so it can calculate dates
     const now = new Date();
     const systemPrompt = `
     You are a smart personal assistant.
@@ -67,8 +84,6 @@ export default async function handler(req, res) {
       "is_event": false,
       "reply": "Your conversational reply here."
     }
-
-    Do not output markdown blocks (like \`\`\`json). Output raw JSON only.
     `;
 
     const chatCompletion = await groq.chat.completions.create({
@@ -77,7 +92,7 @@ export default async function handler(req, res) {
         { role: "user", content: userText },
       ],
       model: "llama-3.1-8b-instant",
-      response_format: { type: "json_object" }, // Force JSON mode
+      response_format: { type: "json_object" },
     });
 
     const aiResult = JSON.parse(chatCompletion.choices[0]?.message?.content);
@@ -85,7 +100,6 @@ export default async function handler(req, res) {
     // --- STEP 3: ACT (Create Event or Reply) ---
 
     if (aiResult.is_event) {
-      // 3A. Create Calendar Event
       console.log("📅 Scheduling Event:", aiResult.summary);
 
       const event = await calendar.events.insert({
@@ -104,7 +118,6 @@ export default async function handler(req, res) {
         link: event.data.htmlLink,
       });
     } else {
-      // 3B. Just Chat
       res.status(200).json({
         transcript: userText,
         reply: aiResult.reply,
@@ -113,6 +126,8 @@ export default async function handler(req, res) {
     }
   } catch (error) {
     console.error("Error:", error);
+    // Cleanup if error occurred before deletion
+    if (filePath && fs.existsSync(filePath)) fs.unlinkSync(filePath);
     res.status(500).json({ error: error.message });
   }
 }
