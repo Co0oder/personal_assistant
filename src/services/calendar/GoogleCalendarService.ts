@@ -27,6 +27,14 @@ export class GoogleCalendarService implements ICalendarService {
     this.logger = new Logger('GoogleCalendarService');
     this.errorHandler = new ErrorHandler('GoogleCalendarService');
 
+    // Log configuration status (without exposing secrets)
+    this.logger.info('Initializing Google Calendar Service', {
+      hasClientId: !!config.clientId,
+      hasClientSecret: !!config.clientSecret,
+      hasRefreshToken: !!config.refreshToken,
+      calendarId: config.calendarId || 'primary'
+    });
+
     // Setup OAuth2 client
     const oauth2Client = new google.auth.OAuth2(
       config.clientId,
@@ -40,7 +48,7 @@ export class GoogleCalendarService implements ICalendarService {
       });
       this.logger.info('Google Calendar authenticated with refresh token');
     } else {
-      this.logger.warn('No refresh token provided - calendar operations may fail');
+      this.logger.warn('⚠️  No refresh token provided - calendar operations WILL FAIL');
     }
 
     this.calendar = google.calendar({ version: 'v3', auth: oauth2Client });
@@ -81,11 +89,25 @@ export class GoogleCalendarService implements ICalendarService {
         id: response.data.id,
         link: response.data.htmlLink,
       };
-    } catch (error) {
+    } catch (error: any) {
+      // Log the full error details for debugging
+      this.logger.error('Google Calendar API error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.status,
+        errors: error.errors,
+        response: error.response?.data
+      });
+
+      // Create detailed error message
+      const errorMessage = error.response?.data?.error?.message
+        || error.message
+        || 'Failed to create calendar event';
+
       const wrappedError = this.errorHandler.wrap(
         CalendarServiceError,
         error as Error,
-        'Failed to create calendar event'
+        `Calendar API Error: ${errorMessage}`
       );
       this.errorHandler.handle(wrappedError);
       throw wrappedError;
