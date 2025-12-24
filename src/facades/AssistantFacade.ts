@@ -2,6 +2,7 @@ import { IAIService } from '../services/ai/IAIService';
 import { ITranscriptionService } from '../services/transcription/ITranscriptionService';
 import { ICalendarService } from '../services/calendar/ICalendarService';
 import { IStorageService } from '../services/storage/IStorageService';
+import { INotesService } from '../services/notes/INotesService';
 import { Logger } from '../utils/Logger';
 
 /**
@@ -14,11 +15,22 @@ export interface ProcessResult {
   /** The reply from the assistant */
   reply: string;
 
-  /** The action taken (calendar_event or chat) */
-  action: 'calendar_event' | 'chat';
+  /** The action taken */
+  action: 'event' | 'note' | 'chat';
 
-  /** Link to calendar event (only if action is calendar_event) */
+  /** Type of content (problem, idea, decision, toDo, event, chat) */
+  teg: string;
+
+  /** Link to calendar event (only if action is event) */
   link?: string;
+
+  /** Saved note data (only if action is note) */
+  note?: {
+    teg: string;
+    title: string;
+    date: string;
+    body: string;
+  };
 }
 
 /**
@@ -30,6 +42,7 @@ export class AssistantFacade {
   private ai: IAIService;
   private calendar: ICalendarService;
   private storage: IStorageService;
+  private notes: INotesService;
   private logger: Logger;
 
   constructor(services: {
@@ -37,11 +50,13 @@ export class AssistantFacade {
     aiService: IAIService;
     calendarService: ICalendarService;
     storageService: IStorageService;
+    notesService: INotesService;
   }) {
     this.transcription = services.transcriptionService;
     this.ai = services.aiService;
     this.calendar = services.calendarService;
     this.storage = services.storageService;
+    this.notes = services.notesService;
     this.logger = new Logger('AssistantFacade');
   }
 
@@ -66,24 +81,42 @@ export class AssistantFacade {
       });
 
       // Step 3: Execute action based on intent
-      this.logger.info(`Step 3: Executing action (is_event: ${intent.is_event})`);
+      this.logger.info(`Step 3: Executing action (teg: ${intent.teg})`);
       let result: ProcessResult;
 
-      if (intent.is_event && intent.summary && intent.start && intent.end) {
+      if (intent.teg === 'event' && intent.title && intent.date && intent.end) {
         // Create calendar event
-        this.logger.info(`Creating calendar event: ${intent.summary}`);
+        this.logger.info(`Creating calendar event: ${intent.title}`);
         const eventResult = await this.calendar.createEvent({
-          summary: intent.summary,
-          start: intent.start,
+          summary: intent.title,
+          start: intent.date,
           end: intent.end,
         });
 
-        const startDate = new Date(intent.start);
+        const startDate = new Date(intent.date);
         result = {
           transcript: transcription.text,
-          reply: `I've scheduled "${intent.summary}" for ${startDate.toLocaleString()}.`,
-          action: 'calendar_event',
+          reply: `I've scheduled "${intent.title}" for ${startDate.toLocaleString()}.`,
+          action: 'event',
+          teg: 'event',
           link: eventResult.link,
+        };
+      } else if (
+        intent.teg === 'problem' ||
+        intent.teg === 'idea' ||
+        intent.teg === 'decision' ||
+        intent.teg === 'toDo'
+      ) {
+        // Save note
+        this.logger.info(`Saving ${intent.teg} note: ${intent.title}`);
+        const savedNote = await this.notes.saveNote(intent);
+
+        result = {
+          transcript: transcription.text,
+          reply: `I've saved your ${intent.teg}: "${intent.title}".`,
+          action: 'note',
+          teg: intent.teg,
+          note: savedNote,
         };
       } else {
         // Chat response
@@ -91,6 +124,7 @@ export class AssistantFacade {
           transcript: transcription.text,
           reply: intent.reply || 'I understand.',
           action: 'chat',
+          teg: 'chat',
         };
       }
 

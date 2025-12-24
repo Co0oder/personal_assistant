@@ -2,10 +2,12 @@ import { IAIService } from '../services/ai/IAIService';
 import { ITranscriptionService } from '../services/transcription/ITranscriptionService';
 import { ICalendarService } from '../services/calendar/ICalendarService';
 import { IStorageService } from '../services/storage/IStorageService';
+import { INotesService } from '../services/notes/INotesService';
 import { GroqAIService } from '../services/ai/GroqAIService';
 import { GroqTranscriptionService } from '../services/transcription/GroqTranscriptionService';
 import { GoogleCalendarService } from '../services/calendar/GoogleCalendarService';
 import { LocalStorageService } from '../services/storage/LocalStorageService';
+import { JsonNotesService } from '../services/notes/JsonNotesService';
 
 /**
  * Service container interface
@@ -15,6 +17,7 @@ export interface Services {
   aiService: IAIService;
   calendarService: ICalendarService;
   storageService: IStorageService;
+  notesService: INotesService;
 }
 
 /**
@@ -58,10 +61,17 @@ export function createServices(): Services {
   // Create storage service
   const storageService = new LocalStorageService();
 
+  // Create notes service
+  const notesService = new JsonNotesService({
+    storageDir: process.env.NOTES_DIR || '/tmp/notes',
+    fileName: 'notes.json',
+  });
+
   return {
     transcriptionService,
     aiService,
     calendarService,
     storageService,
+    notesService,
   };
 }

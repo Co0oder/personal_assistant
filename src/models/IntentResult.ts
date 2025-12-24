@@ -1,19 +1,27 @@
 /**
+ * Types of content that can be extracted from user input
+ */
+export type ContentType = 'event' | 'problem' | 'idea' | 'decision' | 'toDo' | 'chat';
+
+/**
  * Result from intent extraction
  */
 export interface IntentResult {
-  /** Whether this is an event to be scheduled */
-  is_event: boolean;
+  /** Type of content extracted */
+  teg: ContentType;
 
-  /** Event summary (only if is_event is true) */
-  summary?: string;
+  /** Title/summary of the content */
+  title?: string;
 
-  /** Event start time in ISO 8601 format (only if is_event is true) */
-  start?: string;
+  /** Date/time in ISO 8601 format (for events and todos) */
+  date?: string;
 
-  /** Event end time in ISO 8601 format (only if is_event is true) */
+  /** Body/description of the content */
+  body?: string;
+
+  /** Event end time in ISO 8601 format (only for events) */
   end?: string;
 
-  /** Chat reply (only if is_event is false) */
+  /** Chat reply (only for chat type) */
   reply?: string;
 }

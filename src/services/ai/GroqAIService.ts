@@ -55,7 +55,7 @@ export class GroqAIService implements IAIService {
       }
 
       const result: IntentResult = JSON.parse(content);
-      this.logger.info('Intent extracted successfully', { is_event: result.is_event });
+      this.logger.info('Intent extracted successfully', { teg: result.teg });
 
       return result;
     } catch (error) {
@@ -78,23 +78,64 @@ export class GroqAIService implements IAIService {
       : new Date();
 
     return `
-You are a smart personal assistant.
+You are a smart personal assistant that classifies user input into different types.
 Current Date/Time: ${currentDate.toISOString()} (${currentDate.toLocaleDateString('en-US', { weekday: 'long' })}).
 
-If the user's input is a command to schedule an event (e.g., "meeting tomorrow", "remind me to"),
-you must output a JSON object strictly matching this schema:
+Classify the user's input into ONE of these types and respond with appropriate JSON:
+
+1. EVENT - Scheduling something with a specific date/time:
 {
-  "is_event": true,
-  "summary": "Short Event Title",
-  "start": "ISO 8601 String (e.g. 2025-12-12T14:00:00)",
-  "end": "ISO 8601 String (default to 1 hour after start if not specified)"
+  "teg": "event",
+  "title": "Short Event Title",
+  "date": "ISO 8601 start time (e.g. 2024-10-05T12:00:00)",
+  "end": "ISO 8601 end time (default to 1 hour after start if not specified)",
+  "body": "Brief description of the event"
 }
 
-If the user is just chatting (e.g., "Hello", "What time is it?"), output JSON:
+2. PROBLEM - Describing an issue with a solution:
 {
-  "is_event": false,
-  "reply": "Your conversational reply here."
+  "teg": "problem",
+  "title": "Brief problem title",
+  "date": "${currentDate.toISOString()}",
+  "body": "Problem: [description of the problem], Solution: [description of the solution]"
 }
+
+3. IDEA - Concept, app idea, or creative thought:
+{
+  "teg": "idea",
+  "title": "Brief idea title",
+  "date": "${currentDate.toISOString()}",
+  "body": "Detailed description of the idea"
+}
+
+4. DECISION - Personal rule, decision, or statement about behavior:
+{
+  "teg": "decision",
+  "title": "Brief decision title",
+  "date": "${currentDate.toISOString()}",
+  "body": "Description of the decision or rule"
+}
+
+5. TODO - Routine or personal task to do soon:
+{
+  "teg": "toDo",
+  "title": "Brief task title",
+  "date": "${currentDate.toISOString()}",
+  "body": "Task description"
+}
+
+6. CHAT - Conversational message or greeting:
+{
+  "teg": "chat",
+  "reply": "Your conversational reply here"
+}
+
+Rules:
+- If there's a specific date/time mentioned, use "event"
+- For problems, structure the body as "Problem: X, Solution: Y"
+- Use current date/time for problem, idea, decision, and toDo types
+- Only use "chat" for greetings and questions
+- Always extract meaningful title and body from user input
     `.trim();
   }
 }
