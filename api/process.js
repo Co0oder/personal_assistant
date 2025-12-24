@@ -4,6 +4,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { AssistantFacade } from "../dist/facades/AssistantFacade.js";
 import { createServices } from "../dist/config/ServiceConfig.js";
+import { checkAuth } from "../dist/utils/auth.js";
 
 // Load environment variables
 dotenv.config();
@@ -24,6 +25,9 @@ function runMiddleware(req, res, fn) {
 }
 
 export default async function handler(req, res) {
+  // Security check - validate secret key
+  if (checkAuth(req, res)) return;
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
